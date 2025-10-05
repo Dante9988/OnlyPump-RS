@@ -3,10 +3,11 @@ use solana_sdk::{
     signer::Signer,
 };
 use serde::{Deserialize, Serialize};
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam_channel;
+use std::collections::VecDeque;
 
 fn gen_keypair_fast() -> Keypair {
     Keypair::new()
@@ -15,12 +16,15 @@ fn gen_keypair_fast() -> Keypair {
 pub struct VanityService;
 
 impl VanityService {
-    pub fn generate_vanity_batch(suffix: &str, count: usize) -> Vec<Keypair> {
+    pub fn generate_vanity_live(suffix: &str, total_count: usize, batch_size: usize, output_file: &str) -> Vec<Keypair> {
         let (tx, rx) = crossbeam_channel::unbounded();
         let stop = AtomicBool::new(false);
         let workers = rayon::current_num_threads().max(2);
+        let mut collected_keypairs = Vec::new();
+        let mut batch_buffer = VecDeque::new();
 
         std::thread::scope(|scope| {
+            // Spawn worker threads
             for _ in 0..workers {
                 let tx = tx.clone();
                 let stop = &stop;
@@ -37,15 +41,70 @@ impl VanityService {
                 });
             }
 
-            let mut out = Vec::with_capacity(count);
-            for _ in 0..count {
+            // Main collection thread
+            let mut count = 0;
+            while count < total_count {
                 if let Ok(kp) = rx.recv() {
-                    out.push(kp);
+                    let public_key = kp.pubkey().to_string();
+                    let private_key = bs58::encode(&kp.to_bytes()).into_string();
+                    
+                    println!("📍 Found: {}", public_key);
+                    
+                    batch_buffer.push_back(VanityKeypair {
+                        public_key,
+                        private_key,
+                    });
+                    
+                    collected_keypairs.push(kp);
+                    count += 1;
+                    
+                    // Save batch when we reach batch_size
+                    if batch_buffer.len() >= batch_size {
+                        Self::save_batch_to_file(&mut batch_buffer, output_file, count);
+                    }
                 }
             }
+            
+            // Save any remaining keypairs
+            if !batch_buffer.is_empty() {
+                Self::save_batch_to_file(&mut batch_buffer, output_file, count);
+            }
+            
             stop.store(true, Ordering::Relaxed);
-            out
-        })
+        });
+
+        collected_keypairs
+    }
+    
+    fn save_batch_to_file(batch_buffer: &mut VecDeque<VanityKeypair>, output_file: &str, total_found: usize) {
+        let mut batch_keypairs = Vec::new();
+        for _ in 0..batch_buffer.len() {
+            if let Some(kp) = batch_buffer.pop_front() {
+                batch_keypairs.push(kp);
+            }
+        }
+        
+        let batch = VanityBatch {
+            suffix: "pump".to_string(),
+            count: batch_keypairs.len(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            keypairs: batch_keypairs,
+        };
+        
+        let json = serde_json::to_string_pretty(&batch).unwrap();
+        
+        // Append to file or create new
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(output_file)
+            .expect("Failed to open file for writing");
+            
+        writeln!(file, "{}", json).expect("Failed to write to file");
+        writeln!(file, "---").expect("Failed to write separator");
+        
+        println!("💾 Saved batch of {} addresses to: {} (Total found: {})", 
+                 batch.count, output_file, total_found);
     }
 }
 
@@ -65,47 +124,26 @@ struct VanityBatch {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let count: usize = args.get(1).unwrap_or(&"10".to_string()).parse().unwrap_or(10);
-    let output_file = args.get(2).unwrap_or(&"pump_vanity.json".to_string()).clone();
+    let total_count: usize = args.get(1).unwrap_or(&"1000".to_string()).parse().unwrap_or(1000);
+    let batch_size: usize = args.get(2).unwrap_or(&"5".to_string()).parse().unwrap_or(5);
+    let output_file = args.get(3).unwrap_or(&"live_pump_addresses.json".to_string()).clone();
     
-    println!("🚀 Generating {} vanity addresses ending with 'pump'", count);
+    println!("🚀 Generating {} vanity addresses ending with 'pump'", total_count);
+    println!("📦 Saving in batches of {} addresses", batch_size);
     println!("⏱️  This may take a while...");
     println!("💡 Expected ~113k attempts per address");
+    println!("📁 Output file: {}", output_file);
     
     let start = std::time::Instant::now();
-    let keypairs = VanityService::generate_vanity_batch("pump", count);
+    let keypairs = VanityService::generate_vanity_live("pump", total_count, batch_size, &output_file);
     let duration = start.elapsed();
     
     println!("✅ Generated {} vanity addresses in {:?}", keypairs.len(), duration);
     
-    let vanity_keypairs: Vec<VanityKeypair> = keypairs
-        .into_iter()
-        .map(|keypair| {
-            let public_key = keypair.pubkey().to_string();
-            let private_key = bs58::encode(&keypair.to_bytes()).into_string();
-            println!("📍 Found: {}", public_key);
-            
-            VanityKeypair {
-                public_key,
-                private_key,
-            }
-        })
-        .collect();
+    if total_count > 0 {
+        let avg_time = duration.as_millis() as f64 / total_count as f64;
+        println!("📈 Performance: {:.2}ms per address", avg_time);
+    }
     
-    let batch = VanityBatch {
-        suffix: "pump".to_string(),
-        count: vanity_keypairs.len(),
-        generated_at: chrono::Utc::now().to_rfc3339(),
-        keypairs: vanity_keypairs,
-    };
-    
-    let json = serde_json::to_string_pretty(&batch).unwrap();
-    let mut file = File::create(&output_file).expect("Failed to create file");
-    file.write_all(json.as_bytes()).expect("Failed to write file");
-    
-    println!("💾 Saved to: {}", output_file);
-    println!("📊 Average time per address: {:?}", duration / count as u32);
-    
-    let avg_time = duration.as_millis() as f64 / count as f64;
-    println!("📈 Performance: {:.2}ms per address", avg_time);
+    println!("🎉 Generation complete! Check {} for all batches", output_file);
 }

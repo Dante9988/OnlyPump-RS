@@ -41,8 +41,8 @@ backend-rs/
 │   ├── components/           # React components
 │   ├── lib/                 # Utilities and hooks
 │   └── public/
-│       └── test_pump.json   # Pre-generated vanity addresses
-├── test_pump.json           # Backend vanity addresses
+│       └── test_pump.json   # Pre-generated vanity addresses (215 addresses)
+├── consolidate-addresses.js # Utility to consolidate address batches
 ├── start_backend.sh         # Backend startup script
 └── README.md
 ```
@@ -71,6 +71,27 @@ The platform uses pre-generated Solana keypairs ending in "pump" for memorable t
 - Parallel keypair generation with `rayon` for speed
 - Filters addresses ending with "pump" suffix
 - Stores in JSON format for easy access
+
+**Address Tracking:**
+- Frontend loads addresses from `frontend/public/test_pump.json`
+- Used addresses are automatically tracked via `deployedTokens`
+- System filters out previously used addresses
+- Stats show: `available = total - used`
+- Each token creation consumes one address from the pool
+
+**Generating More Addresses:**
+```bash
+# Generate 1000 new addresses in batches of 5
+cargo run --bin generate_pump 1000 5 new_addresses.json
+
+# Consolidate into the format used by frontend
+node consolidate-addresses.js new_addresses.json frontend/public/test_pump.json
+```
+
+**Expected Performance:**
+- **4-char suffix**: ~113,000 attempts per address (~1-2 seconds per address)
+- **1000 addresses**: ~30-60 minutes on modern CPU
+- Uses all CPU cores for maximum speed
 
 ### 2. Token Creation Flow
 
@@ -112,8 +133,14 @@ The platform uses pre-generated Solana keypairs ending in "pump" for memorable t
 
 3. **Generate Vanity Addresses** (optional):
    ```bash
-   cargo run --bin generate_pump
+   # Generate 1000 addresses in batches of 5
+   cargo run --bin generate_pump 1000 5 live_pump_addresses.json
+   
+   # Consolidate into frontend format
+   node consolidate-addresses.js live_pump_addresses.json frontend/public/test_pump.json
    ```
+   
+   **Note**: The project comes with 215 pre-generated pump addresses in `frontend/public/test_pump.json`
 
 4. **Start Backend**:
    ```bash
@@ -307,6 +334,52 @@ NEXT_PUBLIC_HELIUS_API_KEY=YOUR_HELIUS_API_KEY_HERE
 - **Analytics Dashboard**: Token performance metrics
 - **Mobile App**: React Native implementation
 - **Multi-chain Support**: Ethereum, BSC integration
+
+## 🛠️ Utility Scripts
+
+### Consolidate Pump Addresses
+
+The `consolidate-addresses.js` script merges batch-generated vanity addresses into a single array format compatible with the frontend:
+
+```bash
+# Usage
+node consolidate-addresses.js <input_file> <output_file>
+
+# Example: Consolidate new addresses
+node consolidate-addresses.js live_pump_addresses.json frontend/public/test_pump.json
+```
+
+**What it does:**
+- Reads the batch-separated JSON file (with `---` separators)
+- Extracts all keypairs from each batch
+- Combines them into a single array
+- Formats output matching `test_pump.json` structure
+- Updates the count and timestamp
+
+**Input Format** (batch-separated):
+```json
+{
+  "suffix": "pump",
+  "count": 5,
+  "keypairs": [...]
+}
+---
+{
+  "suffix": "pump",
+  "count": 5,
+  "keypairs": [...]
+}
+```
+
+**Output Format** (single array):
+```json
+{
+  "suffix": "pump",
+  "count": 215,
+  "generated_at": "2025-10-05T19:27:10.445Z",
+  "keypairs": [...]
+}
+```
 
 ## 📄 License
 
