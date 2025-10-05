@@ -4,16 +4,16 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useEffect } from 'react';
 
 export default function WalletDebug() {
-  const { 
-    connected, 
-    connecting, 
-    disconnecting, 
-    wallet, 
-    publicKey, 
-    connect, 
+  const {
+    connected,
+    connecting,
+    disconnecting,
+    wallet,
+    publicKey,
+    connect,
     disconnect,
     select,
-    wallets
+    wallets,
   } = useWallet();
 
   useEffect(() => {
@@ -23,7 +23,10 @@ export default function WalletDebug() {
     console.log('Disconnecting:', disconnecting);
     console.log('Wallet:', wallet?.adapter?.name);
     console.log('Public Key:', publicKey?.toString());
-    console.log('Available Wallets:', wallets.map(w => w.adapter.name));
+    console.log(
+      'Available Wallets:',
+      wallets.map((w) => w.adapter.name)
+    );
     console.log('==================');
   }, [connected, connecting, disconnecting, wallet, publicKey, wallets]);
 

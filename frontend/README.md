@@ -27,11 +27,13 @@ The frontend integrates with the Rust backend API:
 ## Getting Started
 
 1. Install dependencies:
+
    ```bash
    yarn install
    ```
 
 2. Start the development server:
+
    ```bash
    yarn dev
    ```

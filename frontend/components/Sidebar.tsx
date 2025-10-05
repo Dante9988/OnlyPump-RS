@@ -1,30 +1,39 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { 
-  HomeIcon, 
-  BeakerIcon, 
-  ChatBubbleLeftRightIcon, 
-  UserIcon, 
-  QuestionMarkCircleIcon, 
+import {
+  HomeIcon,
+  BeakerIcon,
+  ChatBubbleLeftRightIcon,
+  UserIcon,
+  QuestionMarkCircleIcon,
   EllipsisVerticalIcon,
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { connected, publicKey } = useWallet();
-  
+
   const navItems = [
     { name: 'Home', href: '/', icon: HomeIcon },
     { name: 'Explore', href: '/explore', icon: BeakerIcon },
     { name: 'Trade', href: '/trade', icon: ChatBubbleLeftRightIcon },
     { name: 'My Tokens', href: '/tokens', icon: CurrencyDollarIcon },
-    { name: 'Profile', href: connected ? `/profile/${publicKey?.toString()}` : '/profile', icon: UserIcon },
-    { name: 'Support', href: 'https://docs.pump.fun', external: true, icon: QuestionMarkCircleIcon },
+    {
+      name: 'Profile',
+      href: connected ? `/profile/${publicKey?.toString()}` : '/profile',
+      icon: UserIcon,
+    },
+    {
+      name: 'Support',
+      href: 'https://docs.pump.fun',
+      external: true,
+      icon: QuestionMarkCircleIcon,
+    },
   ];
-  
+
   return (
     <div className="h-screen flex flex-col bg-base-900 w-[180px] border-r border-base-800 text-base-content">
       {/* Logo */}
@@ -34,18 +43,18 @@ export default function Sidebar() {
         </div>
         <span className="font-bold text-lg">OnlyPump</span>
       </div>
-      
+
       {/* Navigation */}
       <nav className="flex-1 py-4">
         <ul className="space-y-1">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || 
-              (item.href !== '/' && pathname?.startsWith(item.href));
-            
+            const isActive =
+              pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
+
             return (
               <li key={item.name}>
                 {item.external ? (
-                  <a 
+                  <a
                     href={item.href}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -55,7 +64,7 @@ export default function Sidebar() {
                     <span>{item.name}</span>
                   </a>
                 ) : (
-                  <Link 
+                  <Link
                     href={item.href}
                     className={`flex items-center gap-3 px-4 py-3 hover:bg-base-800 ${
                       isActive ? 'text-primary border-l-4 border-primary pl-3' : ''
@@ -70,14 +79,14 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
-      
+
       {/* Create coin button */}
       <div className="p-3">
         <Link href="/create" className="btn btn-primary w-full">
           Create coin
         </Link>
       </div>
-      
+
       {/* Creator rewards */}
       <div className="p-3 border-t border-base-800">
         <div className="bg-base-800 rounded-lg p-3">
@@ -90,7 +99,7 @@ export default function Sidebar() {
           </Link>
         </div>
       </div>
-      
+
       {/* Mobile app QR */}
       <div className="p-3 border-t border-base-800">
         <div className="bg-base-800 rounded-lg p-3 relative">

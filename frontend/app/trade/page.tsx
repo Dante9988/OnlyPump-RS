@@ -23,24 +23,24 @@ interface TokenInfo {
 
 export default function TradePage() {
   const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
-  const { 
-    buyToken, 
-    sellToken, 
-    isLoading, 
-    connection, 
-    fetchTokenBalance, 
-    fetchSolBalance, 
-    calculateSellAmount, 
-    initConnection 
+  const {
+    buyToken,
+    sellToken,
+    isLoading,
+    connection,
+    fetchTokenBalance,
+    fetchSolBalance,
+    calculateSellAmount,
+    initConnection,
   } = usePumpFunRedux();
-  
+
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
   const [buyAmount, setBuyAmount] = useState('');
   const [sellPercentage, setSellPercentage] = useState<number>(0);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [tokenMint, setTokenMint] = useState<string>('');
-  
+
   // Balances
   const [solBalance, setSolBalance] = useState<number>(0);
   const [tokenBalance, setTokenBalance] = useState<number>(0);
@@ -58,7 +58,7 @@ export default function TradePage() {
         console.error('❌ Failed to initialize connection:', error);
       }
     };
-    
+
     init();
   }, [initConnection]);
 
@@ -89,16 +89,16 @@ export default function TradePage() {
         await fetchBalances();
       }
     };
-    
+
     loadBalances();
-    
+
     // Refresh balances every 10 seconds
     const interval = setInterval(() => {
       if (connected && publicKey && connection && tokenMint) {
         fetchBalances();
       }
     }, 10000);
-    
+
     return () => clearInterval(interval);
   }, [connected, publicKey, connection, tokenMint]);
 
@@ -128,10 +128,14 @@ export default function TradePage() {
 
   const fetchBalances = async () => {
     if (!connected || !publicKey || !connection) {
-      console.log('Cannot fetch balances - not ready:', { connected, publicKey: !!publicKey, connection: !!connection });
+      console.log('Cannot fetch balances - not ready:', {
+        connected,
+        publicKey: !!publicKey,
+        connection: !!connection,
+      });
       return;
     }
-    
+
     console.log('Fetching balances for:', publicKey.toString());
     setIsLoadingBalances(true);
     try {
@@ -139,7 +143,7 @@ export default function TradePage() {
       const solBal = await fetchSolBalance();
       console.log('SOL balance:', solBal);
       setSolBalance(solBal);
-      
+
       // Fetch token balance if we have a token mint
       if (tokenMint) {
         const tokenBal = await fetchTokenBalance(tokenMint);
@@ -157,19 +161,16 @@ export default function TradePage() {
   const fetchTokenInfo = async (mint: string) => {
     setIsLoadingToken(true);
     try {
-      const response = await fetch(
-        `https://api.dexscreener.com/tokens/v1/solana/${mint}`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          }
-        }
-      );
+      const response = await fetch(`https://api.dexscreener.com/tokens/v1/solana/${mint}`, {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
 
       if (response.ok) {
         const data = await response.json();
         console.log('DexScreener response:', data);
-        
+
         // API returns array of pairs for the token
         const pair = data?.pairs?.[0] || data?.[0];
 
@@ -211,23 +212,26 @@ export default function TradePage() {
 
   const waitForConfirmation = async (signature: string) => {
     if (!connection) return;
-    
+
     try {
       toast.loading('Confirming...', { id: 'confirmation' });
-      
+
       const latestBlockhash = await connection.getLatestBlockhash();
-      const confirmation = await connection.confirmTransaction({
-        signature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      }, 'confirmed');
-      
+      const confirmation = await connection.confirmTransaction(
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        'confirmed'
+      );
+
       toast.dismiss('confirmation');
-      
+
       if (confirmation.value.err) {
         throw new Error('Transaction failed');
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error waiting for confirmation:', error);
@@ -267,9 +271,9 @@ export default function TradePage() {
 
       toast.dismiss(loadingToast);
       toast.success(`Transaction sent!`);
-      
+
       const confirmed = await waitForConfirmation(result.signature);
-      
+
       if (confirmed) {
         toast.success(`✅ Buy confirmed!`);
         await fetchBalances();
@@ -314,9 +318,9 @@ export default function TradePage() {
 
       toast.dismiss(loadingToast);
       toast.success(`Transaction sent!`);
-      
+
       const confirmed = await waitForConfirmation(result.signature);
-      
+
       if (confirmed) {
         toast.success(`✅ Sell confirmed!`);
         await fetchBalances();
@@ -349,12 +353,24 @@ export default function TradePage() {
         <div className="min-h-screen flex items-center justify-center bg-base-300">
           <div className="text-center max-w-md">
             <div className="mb-6">
-              <svg className="w-24 h-24 mx-auto text-base-content/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-24 h-24 mx-auto text-base-content/20"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <h1 className="text-3xl font-bold mb-3">No Token Selected</h1>
-            <p className="text-base-content/70 mb-6">Please select a token from My Tokens to start trading</p>
+            <p className="text-base-content/70 mb-6">
+              Please select a token from My Tokens to start trading
+            </p>
             <Link href="/tokens" className="btn btn-primary btn-lg">
               Browse Tokens
             </Link>
@@ -372,7 +388,12 @@ export default function TradePage() {
           <div className="flex items-center justify-between mb-6">
             <Link href="/tokens" className="btn btn-ghost gap-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
               Back
             </Link>
@@ -388,14 +409,16 @@ export default function TradePage() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       {tokenInfo.imageUrl ? (
-                        <img 
-                          src={tokenInfo.imageUrl} 
+                        <img
+                          src={tokenInfo.imageUrl}
                           alt={tokenInfo.symbol}
                           className="w-16 h-16 rounded-full ring-2 ring-primary/20"
                         />
                       ) : (
                         <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center ring-2 ring-primary/20">
-                          <span className="text-white font-bold text-2xl">{tokenInfo.symbol.charAt(0)}</span>
+                          <span className="text-white font-bold text-2xl">
+                            {tokenInfo.symbol.charAt(0)}
+                          </span>
                         </div>
                       )}
                       <div>
@@ -406,11 +429,14 @@ export default function TradePage() {
                         </p>
                       </div>
                     </div>
-                    
+
                     {tokenInfo.priceChange24h !== undefined && (
                       <div className="text-right">
-                        <div className={`text-3xl font-bold ${tokenInfo.priceChange24h >= 0 ? 'text-success' : 'text-error'}`}>
-                          {tokenInfo.priceChange24h >= 0 ? '+' : ''}{tokenInfo.priceChange24h.toFixed(2)}%
+                        <div
+                          className={`text-3xl font-bold ${tokenInfo.priceChange24h >= 0 ? 'text-success' : 'text-error'}`}
+                        >
+                          {tokenInfo.priceChange24h >= 0 ? '+' : ''}
+                          {tokenInfo.priceChange24h.toFixed(2)}%
                         </div>
                         <div className="text-sm text-base-content/60">24h Change</div>
                       </div>
@@ -443,8 +469,18 @@ export default function TradePage() {
                   <h3 className="text-lg font-bold mb-4">Price Chart</h3>
                   <div className="h-96 flex items-center justify-center bg-base-200 rounded-lg">
                     <div className="text-center text-base-content/40">
-                      <svg className="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                      <svg
+                        className="w-16 h-16 mx-auto mb-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                        />
                       </svg>
                       <p>Chart coming soon</p>
                     </div>
@@ -460,13 +496,13 @@ export default function TradePage() {
                 <div className="card-body p-4">
                   {/* Mode Tabs */}
                   <div className="tabs tabs-boxed bg-base-200 p-1 mb-4">
-                    <button 
+                    <button
                       className={`tab flex-1 ${tradeMode === 'buy' ? 'tab-active' : ''}`}
                       onClick={() => setTradeMode('buy')}
                     >
                       Buy
                     </button>
-                    <button 
+                    <button
                       className={`tab flex-1 ${tradeMode === 'sell' ? 'tab-active' : ''}`}
                       onClick={() => setTradeMode('sell')}
                     >
@@ -476,8 +512,18 @@ export default function TradePage() {
 
                   {!connected ? (
                     <div className="text-center py-12">
-                      <svg className="w-16 h-16 mx-auto mb-4 text-base-content/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      <svg
+                        className="w-16 h-16 mx-auto mb-4 text-base-content/20"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
                       </svg>
                       <p className="mb-4 text-base-content/70">Connect wallet to trade</p>
                       <WalletMultiButton className="btn btn-primary" />
@@ -498,14 +544,35 @@ export default function TradePage() {
                             <div className="bg-base-200 rounded-xl p-4">
                               <div className="flex items-start gap-3 mb-3">
                                 <div className="flex items-center gap-2">
-                                  <svg className="w-6 h-6" viewBox="0 0 397.7 311.7" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <linearGradient id="solGradient" x1="360.879" y1="351.455" x2="141.213" y2="-69.2936" gradientUnits="userSpaceOnUse">
-                                      <stop offset="0" stopColor="#00FFA3"/>
-                                      <stop offset="1" stopColor="#DC1FFF"/>
+                                  <svg
+                                    className="w-6 h-6"
+                                    viewBox="0 0 397.7 311.7"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <linearGradient
+                                      id="solGradient"
+                                      x1="360.879"
+                                      y1="351.455"
+                                      x2="141.213"
+                                      y2="-69.2936"
+                                      gradientUnits="userSpaceOnUse"
+                                    >
+                                      <stop offset="0" stopColor="#00FFA3" />
+                                      <stop offset="1" stopColor="#DC1FFF" />
                                     </linearGradient>
-                                    <path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z" fill="url(#solGradient)"/>
-                                    <path d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z" fill="url(#solGradient)"/>
-                                    <path d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z" fill="url(#solGradient)"/>
+                                    <path
+                                      d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z"
+                                      fill="url(#solGradient)"
+                                    />
+                                    <path
+                                      d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z"
+                                      fill="url(#solGradient)"
+                                    />
+                                    <path
+                                      d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z"
+                                      fill="url(#solGradient)"
+                                    />
                                   </svg>
                                   <span className="font-bold text-lg">SOL</span>
                                 </div>
@@ -519,11 +586,38 @@ export default function TradePage() {
                                 step="0.01"
                               />
                               <div className="flex gap-2 mt-3">
-                                <button onClick={() => setBuyAmount('0.1')} className="btn btn-xs btn-ghost">0.1</button>
-                                <button onClick={() => setBuyAmount('0.5')} className="btn btn-xs btn-ghost">0.5</button>
-                                <button onClick={() => setBuyAmount('1')} className="btn btn-xs btn-ghost">1</button>
-                                <button onClick={() => setBuyAmount((solBalance * 0.5).toFixed(4))} className="btn btn-xs btn-ghost">50%</button>
-                                <button onClick={() => setBuyAmount(Math.max(0, solBalance - 0.01).toFixed(4))} className="btn btn-xs btn-ghost">MAX</button>
+                                <button
+                                  onClick={() => setBuyAmount('0.1')}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  0.1
+                                </button>
+                                <button
+                                  onClick={() => setBuyAmount('0.5')}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  0.5
+                                </button>
+                                <button
+                                  onClick={() => setBuyAmount('1')}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  1
+                                </button>
+                                <button
+                                  onClick={() => setBuyAmount((solBalance * 0.5).toFixed(4))}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  50%
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setBuyAmount(Math.max(0, solBalance - 0.01).toFixed(4))
+                                  }
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  MAX
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -531,8 +625,18 @@ export default function TradePage() {
                           {/* Swap Icon */}
                           <div className="flex justify-center -my-2">
                             <div className="bg-base-100 p-2 rounded-xl border-4 border-base-300">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                                />
                               </svg>
                             </div>
                           </div>
@@ -540,14 +644,20 @@ export default function TradePage() {
                           {/* You Receive */}
                           <div>
                             <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm text-base-content/60">You receive (estimated)</span>
+                              <span className="text-sm text-base-content/60">
+                                You receive (estimated)
+                              </span>
                             </div>
                             <div className="bg-base-200 rounded-xl p-4">
                               <div className="flex items-center gap-3">
                                 <div className="text-3xl font-bold text-base-content/50">~</div>
                                 <div className="flex items-center gap-2 bg-base-100 px-4 py-2 rounded-lg ml-auto">
                                   {tokenInfo.imageUrl ? (
-                                    <img src={tokenInfo.imageUrl} className="w-6 h-6 rounded-full" alt={tokenInfo.symbol} />
+                                    <img
+                                      src={tokenInfo.imageUrl}
+                                      className="w-6 h-6 rounded-full"
+                                      alt={tokenInfo.symbol}
+                                    />
                                   ) : (
                                     <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded-full" />
                                   )}
@@ -581,24 +691,33 @@ export default function TradePage() {
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-sm text-base-content/60">You sell</span>
                               <span className="text-sm text-base-content/60">
-                                Balance: {isLoadingBalances ? '...' : `${tokenBalance.toLocaleString()} ${tokenInfo.symbol}`}
+                                Balance:{' '}
+                                {isLoadingBalances
+                                  ? '...'
+                                  : `${tokenBalance.toLocaleString()} ${tokenInfo.symbol}`}
                               </span>
                             </div>
                             <div className="bg-base-200 rounded-xl p-4">
                               <div className="flex items-center gap-3 mb-4">
                                 <div className="text-3xl font-bold">
-                                  {sellPercentage === 0 ? '0' : ((tokenBalance * sellPercentage) / 100).toLocaleString()}
+                                  {sellPercentage === 0
+                                    ? '0'
+                                    : ((tokenBalance * sellPercentage) / 100).toLocaleString()}
                                 </div>
                                 <div className="flex items-center gap-2 bg-base-100 px-4 py-2 rounded-lg ml-auto">
                                   {tokenInfo.imageUrl ? (
-                                    <img src={tokenInfo.imageUrl} className="w-6 h-6 rounded-full" alt={tokenInfo.symbol} />
+                                    <img
+                                      src={tokenInfo.imageUrl}
+                                      className="w-6 h-6 rounded-full"
+                                      alt={tokenInfo.symbol}
+                                    />
                                   ) : (
                                     <div className="w-6 h-6 bg-gradient-to-r from-primary to-secondary rounded-full" />
                                   )}
                                   <span className="font-bold">{tokenInfo.symbol}</span>
                                 </div>
                               </div>
-                              
+
                               {/* Percentage Slider */}
                               <div>
                                 <input
@@ -616,12 +735,32 @@ export default function TradePage() {
                                   <span>100%</span>
                                 </div>
                               </div>
-                              
+
                               <div className="flex gap-2 mt-3">
-                                <button onClick={() => setSellPercentage(25)} className="btn btn-xs btn-ghost">25%</button>
-                                <button onClick={() => setSellPercentage(50)} className="btn btn-xs btn-ghost">50%</button>
-                                <button onClick={() => setSellPercentage(75)} className="btn btn-xs btn-ghost">75%</button>
-                                <button onClick={() => setSellPercentage(100)} className="btn btn-xs btn-ghost">100%</button>
+                                <button
+                                  onClick={() => setSellPercentage(25)}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  25%
+                                </button>
+                                <button
+                                  onClick={() => setSellPercentage(50)}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  50%
+                                </button>
+                                <button
+                                  onClick={() => setSellPercentage(75)}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  75%
+                                </button>
+                                <button
+                                  onClick={() => setSellPercentage(100)}
+                                  className="btn btn-xs btn-ghost"
+                                >
+                                  100%
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -629,8 +768,18 @@ export default function TradePage() {
                           {/* Swap Icon */}
                           <div className="flex justify-center -my-2">
                             <div className="bg-base-100 p-2 rounded-xl border-4 border-base-300">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                                />
                               </svg>
                             </div>
                           </div>
@@ -653,14 +802,35 @@ export default function TradePage() {
                                   </div>
                                 )}
                                 <div className="flex items-center gap-2">
-                                  <svg className="w-6 h-6" viewBox="0 0 397.7 311.7" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <linearGradient id="solGradient2" x1="360.879" y1="351.455" x2="141.213" y2="-69.2936" gradientUnits="userSpaceOnUse">
-                                      <stop offset="0" stopColor="#00FFA3"/>
-                                      <stop offset="1" stopColor="#DC1FFF"/>
+                                  <svg
+                                    className="w-6 h-6"
+                                    viewBox="0 0 397.7 311.7"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <linearGradient
+                                      id="solGradient2"
+                                      x1="360.879"
+                                      y1="351.455"
+                                      x2="141.213"
+                                      y2="-69.2936"
+                                      gradientUnits="userSpaceOnUse"
+                                    >
+                                      <stop offset="0" stopColor="#00FFA3" />
+                                      <stop offset="1" stopColor="#DC1FFF" />
                                     </linearGradient>
-                                    <path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z" fill="url(#solGradient2)"/>
-                                    <path d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z" fill="url(#solGradient2)"/>
-                                    <path d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z" fill="url(#solGradient2)"/>
+                                    <path
+                                      d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z"
+                                      fill="url(#solGradient2)"
+                                    />
+                                    <path
+                                      d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z"
+                                      fill="url(#solGradient2)"
+                                    />
+                                    <path
+                                      d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z"
+                                      fill="url(#solGradient2)"
+                                    />
                                   </svg>
                                   <span className="font-bold text-lg">SOL</span>
                                 </div>
@@ -701,8 +871,18 @@ export default function TradePage() {
                       onClick={() => window.open(`https://solscan.io/token/${tokenMint}`, '_blank')}
                       className="btn btn-sm btn-ghost w-full justify-start gap-2"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
                       </svg>
                       View on Solscan
                     </button>
@@ -710,17 +890,39 @@ export default function TradePage() {
                       onClick={() => window.open(`https://pump.fun/${tokenMint}`, '_blank')}
                       className="btn btn-sm btn-ghost w-full justify-start gap-2"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
                       </svg>
                       View on Pump.fun
                     </button>
                     <button
-                      onClick={() => window.open(`https://dexscreener.com/solana/${tokenMint}`, '_blank')}
+                      onClick={() =>
+                        window.open(`https://dexscreener.com/solana/${tokenMint}`, '_blank')
+                      }
                       className="btn btn-sm btn-ghost w-full justify-start gap-2"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                        />
                       </svg>
                       View on DexScreener
                     </button>

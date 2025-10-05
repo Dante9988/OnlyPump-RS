@@ -19,9 +19,7 @@ const createNoopStorage = () => {
 };
 
 // Use localStorage for browser, noop storage for SSR
-const storage = typeof window !== 'undefined' 
-  ? createWebStorage('local')
-  : createNoopStorage();
+const storage = typeof window !== 'undefined' ? createWebStorage('local') : createNoopStorage();
 
 // Persist configuration
 const persistConfig = {

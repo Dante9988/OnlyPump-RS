@@ -14,7 +14,9 @@ export default function Navbar() {
       if (connected && publicKey) {
         try {
           const { Connection, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
-          const connection = new Connection(process.env.NEXT_PUBLIC_RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com');
+          const connection = new Connection(
+            process.env.NEXT_PUBLIC_RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com'
+          );
           const balance = await connection.getBalance(publicKey);
           setSolBalance(balance / LAMPORTS_PER_SOL);
         } catch (error) {
@@ -35,10 +37,25 @@ export default function Navbar() {
         {/* Search bar */}
         <div className="form-control hidden md:block w-full max-w-xs mr-4">
           <div className="input-group">
-            <input type="text" placeholder="Search tokens..." className="input input-bordered w-full" />
+            <input
+              type="text"
+              placeholder="Search tokens..."
+              className="input input-bordered w-full"
+            />
             <button className="btn btn-square bg-primary">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
             </button>
           </div>
@@ -48,7 +65,7 @@ export default function Navbar() {
         <Link href="/create" className="btn btn-primary">
           Create coin
         </Link>
-        
+
         {connected && publicKey ? (
           <div className="dropdown dropdown-end">
             <label tabIndex={0} className="btn btn-ghost btn-circle avatar">
@@ -58,7 +75,10 @@ export default function Navbar() {
                 </div>
               </div>
             </label>
-            <ul tabIndex={0} className="menu dropdown-content z-[1] p-2 shadow bg-base-800 rounded-box w-52 mt-4">
+            <ul
+              tabIndex={0}
+              className="menu dropdown-content z-[1] p-2 shadow bg-base-800 rounded-box w-52 mt-4"
+            >
               <li className="p-2 text-center border-b border-base-700">
                 <div>
                   <div className="font-medium">Wallet</div>
@@ -73,22 +93,30 @@ export default function Navbar() {
               <li>
                 <Link href="/dashboard" className="flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
                   </svg>
                   Dashboard
                   <span className="badge badge-primary badge-xs">BETA</span>
                 </Link>
               </li>
-              <li><Link href={`/profile/${publicKey.toString()}`}>Profile</Link></li>
-              <li><Link href="/tokens">My Tokens</Link></li>
-              <li><a onClick={() => disconnect()}>Disconnect</a></li>
+              <li>
+                <Link href={`/profile/${publicKey.toString()}`}>Profile</Link>
+              </li>
+              <li>
+                <Link href="/tokens">My Tokens</Link>
+              </li>
+              <li>
+                <a onClick={() => disconnect()}>Disconnect</a>
+              </li>
             </ul>
           </div>
         ) : (
-          <button 
-            className="btn btn-outline"
-            onClick={() => setVisible(true)}
-          >
+          <button className="btn btn-outline" onClick={() => setVisible(true)}>
             Connect Wallet
           </button>
         )}

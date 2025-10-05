@@ -5,11 +5,7 @@
  * @param endChars Number of characters to show at the end
  * @returns Shortened address with ellipsis
  */
-export function shortenAddress(
-  address: string,
-  startChars = 4,
-  endChars = 4
-): string {
+export function shortenAddress(address: string, startChars = 4, endChars = 4): string {
   if (!address) {
     return '';
   }

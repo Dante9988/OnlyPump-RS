@@ -24,21 +24,17 @@ export default function NotificationContainer() {
 
   const addNotification = (notification: NotificationProps) => {
     const id = notification.id || `notification-${Date.now()}`;
-    setNotifications(prev => [...prev, { ...notification, id }]);
+    setNotifications((prev) => [...prev, { ...notification, id }]);
   };
 
   const removeNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
+    setNotifications((prev) => prev.filter((notification) => notification.id !== id));
   };
 
   return (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md">
-      {notifications.map(notification => (
-        <Notification
-          key={notification.id}
-          {...notification}
-          onClose={removeNotification}
-        />
+      {notifications.map((notification) => (
+        <Notification key={notification.id} {...notification} onClose={removeNotification} />
       ))}
     </div>
   );
@@ -49,9 +45,9 @@ export const showNotification = (notification: Omit<NotificationProps, 'id'>) =>
   const event = new CustomEvent('notification', {
     detail: {
       ...notification,
-      id: `notification-${Date.now()}`
-    }
+      id: `notification-${Date.now()}`,
+    },
   });
-  
+
   window.dispatchEvent(event);
 };

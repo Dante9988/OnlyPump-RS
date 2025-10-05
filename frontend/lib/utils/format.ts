@@ -12,16 +12,12 @@ export function formatNumber(
     notation?: 'standard' | 'scientific' | 'engineering' | 'compact';
   } = {}
 ): string {
-  const {
-    minimumFractionDigits = 0,
-    maximumFractionDigits = 2,
-    notation = 'compact'
-  } = options;
-  
+  const { minimumFractionDigits = 0, maximumFractionDigits = 2, notation = 'compact' } = options;
+
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits,
     maximumFractionDigits,
-    notation
+    notation,
   }).format(value);
 }
 
@@ -49,14 +45,10 @@ export function formatPrice(price: number): string {
  * @param suffixLength Number of characters to show at the end
  * @returns Shortened address string
  */
-export function shortenAddress(
-  address: string,
-  prefixLength = 4,
-  suffixLength = 4
-): string {
+export function shortenAddress(address: string, prefixLength = 4, suffixLength = 4): string {
   if (!address) return '';
   if (address.length <= prefixLength + suffixLength) return address;
-  
+
   return `${address.slice(0, prefixLength)}...${address.slice(-suffixLength)}`;
 }
 
@@ -74,18 +66,14 @@ export function formatPercent(
     includeSign?: boolean;
   } = {}
 ): string {
-  const {
-    minimumFractionDigits = 0,
-    maximumFractionDigits = 2,
-    includeSign = true
-  } = options;
-  
+  const { minimumFractionDigits = 0, maximumFractionDigits = 2, includeSign = true } = options;
+
   const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits,
     maximumFractionDigits,
     style: 'percent',
-    signDisplay: includeSign ? 'exceptZero' : 'auto'
+    signDisplay: includeSign ? 'exceptZero' : 'auto',
   }).format(value / 100);
-  
+
   return formatted;
 }

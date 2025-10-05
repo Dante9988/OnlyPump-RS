@@ -25,7 +25,7 @@ export default function Notification({
   tokenMint,
   autoClose = true,
   autoCloseTime = 5000,
-  onClose
+  onClose,
 }: NotificationProps) {
   const [visible, setVisible] = useState(true);
 
@@ -34,7 +34,7 @@ export default function Notification({
       const timer = setTimeout(() => {
         handleClose();
       }, autoCloseTime);
-      
+
       return () => clearTimeout(timer);
     }
   }, [autoClose, autoCloseTime]);
@@ -48,20 +48,20 @@ export default function Notification({
 
   if (!visible) return null;
 
-  const bgColor = type === 'success' ? 'bg-success' : 
-                  type === 'error' ? 'bg-error' : 
-                  'bg-info';
+  const bgColor = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-error' : 'bg-info';
 
   return (
-    <div className={`${bgColor} text-white px-4 py-3 rounded-md shadow-lg flex items-center justify-between`}>
+    <div
+      className={`${bgColor} text-white px-4 py-3 rounded-md shadow-lg flex items-center justify-between`}
+    >
       <div className="flex-1">
         <h3 className="font-bold">{title}</h3>
         {message && <p className="text-sm">{message}</p>}
       </div>
-      
+
       <div className="flex items-center gap-2">
         {txId && (
-          <Link 
+          <Link
             href={`https://solscan.io/tx/${txId}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -70,20 +70,17 @@ export default function Notification({
             View Tx
           </Link>
         )}
-        
+
         {tokenMint && (
-          <Link 
+          <Link
             href={`/trade?token=${tokenMint}`}
             className="btn btn-sm btn-outline border-white text-white hover:bg-white hover:text-black"
           >
             View Coin
           </Link>
         )}
-        
-        <button 
-          onClick={handleClose}
-          className="btn btn-sm btn-ghost text-white"
-        >
+
+        <button onClick={handleClose} className="btn btn-sm btn-ghost text-white">
           <XMarkIcon className="w-4 h-4" />
         </button>
       </div>
