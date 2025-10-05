@@ -49,6 +49,7 @@ import {
   setLoading,
   clearError,
   addCreatedToken,
+  deduplicateTokens,
   type CreateTokenRequest,
   type BuyTokenRequest,
   type SellTokenRequest,
@@ -150,6 +151,10 @@ export function usePumpFunRedux() {
 
   // Initialize connection on mount
   const initConnection = useCallback(async () => {
+    // Clean up any duplicate tokens from persisted state
+    dispatch(deduplicateTokens());
+    console.log('✅ Deduplicated persisted tokens');
+    
     if (!connection) {
       console.log('🔄 Initializing Solana connection...');
       try {
@@ -291,14 +296,11 @@ export function usePumpFunRedux() {
         transaction.recentBlockhash = blockhashResult.blockhash;
         transaction.feePayer = publicKey;
 
-        // Partial-sign mint and then wallet signs and sends
-        
+        // Partial-sign with mint keypair
         transaction.partialSign(mintKeypair);
         
-        // Transaction partially signed
-        
-        const signedTransaction = await signTransaction(transaction);
-        signature = await retryRpcCall(() => sendTransaction(signedTransaction, connection));
+        // Sign and send with wallet (single popup)
+        signature = await retryRpcCall(() => sendTransaction(transaction, connection));
       } else {
         throw new Error('Invalid response from SDK - expected instruction');
       }
@@ -345,9 +347,20 @@ export function usePumpFunRedux() {
         return await createToken(request);
       }
 
-      if (!connection) {
-        await initConnection();
-        if (!connection) throw new Error('Failed to initialize Solana connection. Please retry.');
+      // Ensure connection is initialized
+      let activeConnection = connection;
+      if (!activeConnection) {
+        console.log('🔄 Connection not available, initializing...');
+        const result = await dispatch(initializeConnection());
+        if (initializeConnection.fulfilled.match(result)) {
+          // Create connection from the newly set endpoint
+          activeConnection = new Connection(result.payload, {
+            commitment: 'confirmed',
+            confirmTransactionInitialTimeout: 60000,
+          });
+        } else {
+          throw new Error('Failed to initialize Solana connection. Please refresh the page and try again.');
+        }
       }
 
       dispatch(setLoading(true));
@@ -367,12 +380,12 @@ export function usePumpFunRedux() {
         const metadataUri = createMetadataUri(request);
 
         // Create provider for Pump.fun SDK
-        const provider = createProvider(connection, signTransaction, async (txs) => {
+        const provider = createProvider(activeConnection, signTransaction, async (txs) => {
           return Promise.all(txs.map(tx => signTransaction(tx)));
         }, publicKey);
         
         // Use official Pump.fun SDK
-        const onlineSdk = new OnlinePumpSdk(connection);
+        const onlineSdk = new OnlinePumpSdk(activeConnection);
         const sdk = new PumpSdk();
 
         // Fetch global data first
@@ -406,14 +419,15 @@ export function usePumpFunRedux() {
           const transaction = new Transaction();
           allInstructions.forEach(ix => transaction.add(ix));
 
-          const { blockhash } = await retryRpcCall(() => connection.getLatestBlockhash());
+          const { blockhash } = await retryRpcCall(() => activeConnection.getLatestBlockhash());
           transaction.recentBlockhash = blockhash;
           transaction.feePayer = publicKey;
 
-          // Partial sign with the mint keypair, then wallet signs and sends
+          // Partial sign with the mint keypair
           transaction.partialSign(mintKeypair);
-          const signed = await signTransaction(transaction);
-          signature = await retryRpcCall(() => sendTransaction(signed, connection));
+          
+          // Sign and send with wallet (single popup)
+          signature = await retryRpcCall(() => sendTransaction(transaction, activeConnection));
         } else {
           throw new Error('Invalid response from SDK - expected instructions');
         }
@@ -495,9 +509,8 @@ export function usePumpFunRedux() {
         transaction.recentBlockhash = blockhashResult.blockhash;
         transaction.feePayer = publicKey;
 
-        // Sign and send the transaction with retry logic
-        const signedTransaction = await signTransaction(transaction);
-        const signature = await retryRpcCall(() => sendTransaction(signedTransaction, connection));
+        // Sign and send the transaction with retry logic (single popup)
+        const signature = await retryRpcCall(() => sendTransaction(transaction, connection));
 
         const result = {
           signature: signature,
@@ -541,7 +554,16 @@ export function usePumpFunRedux() {
 
       let amountBN: BN;
       if (request.sell_all || !request.amount_tokens) {
-        amountBN = new BN(0); // 0 = sell all
+        // Fetch actual token balance for sell all
+        try {
+          const tokenAccount = getAssociatedTokenAddressSync(mintPubkey, publicKey, true);
+          const accountInfo = await getAccount(connection, tokenAccount);
+          amountBN = new BN(accountInfo.amount.toString());
+          console.log('Selling all tokens:', accountInfo.amount.toString());
+        } catch (error) {
+          console.error('Error fetching token balance:', error);
+          throw new Error('Failed to fetch token balance. Do you have tokens to sell?');
+        }
       } else {
         // Pump.fun tokens are 6 decimals
         amountBN = new BN(Math.floor(request.amount_tokens * 1_000_000));
@@ -573,9 +595,8 @@ export function usePumpFunRedux() {
         transaction.recentBlockhash = blockhashResult.blockhash;
         transaction.feePayer = publicKey;
 
-        // Sign and send the transaction with retry logic
-        const signedTransaction = await signTransaction(transaction);
-        const signature = await retryRpcCall(() => sendTransaction(signedTransaction, connection));
+        // Sign and send the transaction with retry logic (single popup)
+        const signature = await retryRpcCall(() => sendTransaction(transaction, connection));
 
         const result = {
           signature: signature,
@@ -625,8 +646,152 @@ export function usePumpFunRedux() {
     }
   }, [connected, publicKey, connection]);
 
+  // Calculate expected SOL amount from selling tokens
+  const calculateSellAmount = useCallback(async (mintAddress: string, tokenAmount: number): Promise<number> => {
+    if (!connected || !publicKey || !connection) {
+      return 0;
+    }
+
+    try {
+      const mintPubkey = new PublicKey(mintAddress);
+      const onlineSdk = new OnlinePumpSdk(connection);
+      
+      // Fetch required data
+      const global = await onlineSdk.fetchGlobal();
+      const { bondingCurve } = await onlineSdk.fetchSellState(mintPubkey, publicKey);
+
+      // Convert token amount to BN (6 decimals for Pump.fun tokens)
+      const amountBN = new BN(Math.floor(tokenAmount * 1_000_000));
+
+      // Calculate expected SOL amount
+      const solAmountBN = getSellSolAmountFromTokenAmount({
+        global,
+        feeConfig: null,
+        mintSupply: global.tokenTotalSupply,
+        bondingCurve,
+        amount: amountBN,
+      });
+
+      // Convert to SOL (from lamports)
+      return Number(solAmountBN.toString()) / LAMPORTS_PER_SOL;
+    } catch (error) {
+      console.error('Error calculating sell amount:', error);
+      return 0;
+    }
+  }, [connected, publicKey, connection]);
+
+  // Fetch total claimable creator fees using Pump.fun SDK
+  const fetchCreatorFees = useCallback(async (): Promise<{claimed: number, unclaimed: number, total: number}> => {
+    if (!connected || !publicKey || !connection) {
+      console.log('fetchCreatorFees: Not ready', { connected, publicKey: !!publicKey, connection: !!connection });
+      return {claimed: 0, unclaimed: 0, total: 0};
+    }
+
+    try {
+      console.log('🔍 Checking creator fees for wallet:', publicKey.toString());
+      console.log('🔍 Connection endpoint:', connection.rpcEndpoint);
+      
+      // Use Pump.fun SDK to get creator vault balances
+      const onlineSdk = new OnlinePumpSdk(connection);
+      
+      console.log('📡 SDK initialized, calling getCreatorVaultBalance...');
+      
+      // Get balance from main program (this is the ACTUAL claimable balance after rent)
+      const vaultBalance = await onlineSdk.getCreatorVaultBalance(publicKey);
+      console.log('💰 Claimable vault balance (SDK, after rent):', vaultBalance.toString(), 'lamports');
+      
+      // Get balance from both programs
+      const vaultBalanceBoth = await onlineSdk.getCreatorVaultBalanceBothPrograms(publicKey);
+      console.log('💰 Both programs balance:', vaultBalanceBoth.toString(), 'lamports');
+      
+      // Calculate SOL amounts - SDK already handles rent exemption
+      const unclaimedSOL = vaultBalance.toNumber() / LAMPORTS_PER_SOL;
+      const bothSOL = vaultBalanceBoth.toNumber() / LAMPORTS_PER_SOL;
+      
+      console.log('💰 Unclaimed (main program):', unclaimedSOL, 'SOL');
+      console.log('💰 Unclaimed (both programs):', bothSOL, 'SOL');
+      
+      // Use the higher of the two SDK methods (these are ACTUAL claimable amounts)
+      const finalUnclaimedSOL = Math.max(unclaimedSOL, bothSOL);
+      
+      // Get claimed fees from transaction history (actual on-chain claims)
+      let claimedSOL = 0;
+      try {
+        console.log('🔍 Fetching claim history from Helius...');
+        const walletAddress = publicKey.toString();
+        const heliusApiKey = process.env.NEXT_PUBLIC_HELIUS_API_KEY || 'f7c74abc-20d1-450d-b655-64f460fd5856';
+        
+        const response = await fetch(`https://api.helius.xyz/v0/addresses/${walletAddress}/transactions?api-key=${heliusApiKey}&limit=100`);
+        
+        if (response.ok) {
+          const transactions = await response.json();
+          console.log(`📊 Fetched ${transactions.length} transactions`);
+          
+          // Look for collectCoinCreatorFee transactions
+          for (const tx of transactions) {
+            console.log(`🔍 Checking tx ${tx.signature?.slice(0, 8)}:`, {
+              type: tx.type,
+              description: tx.description,
+              hasPumpFun: tx.accountData?.some((acc: any) => acc.account === '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'),
+              hasNativeTransfers: !!tx.nativeTransfers
+            });
+            
+            // Check if it's a Pump.fun transaction
+            const isPumpFunTx = tx.accountData?.some((acc: any) => 
+              acc.account === '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'
+            );
+            
+            if (isPumpFunTx && tx.nativeTransfers && tx.nativeTransfers.length > 0) {
+              console.log(`🔍 Pump.fun tx ${tx.signature?.slice(0, 8)} native transfers:`, tx.nativeTransfers);
+              
+              // Find transfers TO the creator wallet (these are fee claims)
+              for (const transfer of tx.nativeTransfers) {
+                if (transfer.toUserAccount === walletAddress && transfer.amount > 0) {
+                  // Check if this is from the creator vault (fee claim)
+                  // Creator vault transfers are the fee claims
+                  const amountSOL = transfer.amount / LAMPORTS_PER_SOL;
+                  
+                  // Only count if it's a reasonable fee amount (not just dust)
+                  if (amountSOL >= 0.0001) {
+                    claimedSOL += amountSOL;
+                    console.log(`💰 Found claimed fee: ${amountSOL} SOL in tx ${tx.signature}`);
+                  }
+                }
+              }
+            }
+          }
+          
+          console.log('💰 Total claimed fees from history:', claimedSOL, 'SOL');
+        } else {
+          console.log('⚠️ Failed to fetch transaction history');
+        }
+      } catch (error) {
+        console.error('Error fetching claim history:', error);
+      }
+      
+      // Total = claimed (from transaction history) + unclaimed (on-chain)
+      const totalSOL = claimedSOL + finalUnclaimedSOL;
+      
+      console.log('💰 Final breakdown:', {
+        claimed: claimedSOL,
+        unclaimed: finalUnclaimedSOL,
+        total: totalSOL
+      });
+      
+      return {
+        claimed: claimedSOL,
+        unclaimed: finalUnclaimedSOL,
+        total: totalSOL
+      };
+    } catch (error) {
+      console.error('❌ Error fetching creator fees:', error);
+      console.error('❌ Error details:', error);
+      return {claimed: 0, unclaimed: 0, total: 0};
+    }
+  }, [connected, publicKey, connection]);
+
   // Claim creator fees
-  const claimFees = useCallback(async (mintAddress: string): Promise<TransactionResponse> => {
+  const claimFees = useCallback(async (mintAddress?: string): Promise<TransactionResponse> => {
     if (!connected || !publicKey || !signTransaction || !sendTransaction || !connection) {
       throw new Error('Wallet not connected or connection not initialized');
     }
@@ -635,19 +800,23 @@ export function usePumpFunRedux() {
     dispatch(clearError());
 
     try {
-      const mintPubkey = new PublicKey(mintAddress);
+      console.log('🎯 Claiming creator fees for wallet:', publicKey.toString());
       
-      // Create provider for Pump.fun SDK
-      const provider = createProvider(connection, signTransaction, async (txs) => {
-        return Promise.all(txs.map(tx => signTransaction(tx)));
-      }, publicKey);
-      
-      // Use official Pump.fun SDK
+      // First, get the current unclaimed balance to save it after claiming
       const onlineSdk = new OnlinePumpSdk(connection);
-      const sdk = new PumpSdk();
+      const currentBalance = await onlineSdk.getCreatorVaultBalance(publicKey);
+      const amountToClaim = currentBalance.toNumber() / LAMPORTS_PER_SOL;
+      
+      console.log('💰 Amount to claim:', amountToClaim, 'SOL');
+      
+      if (amountToClaim === 0) {
+        throw new Error('No fees available to claim');
+      }
 
-      // Create claim instruction using OnlinePumpSdk
-      const claimInstructions = await onlineSdk.collectCoinCreatorFeeInstructions(provider.publicKey);
+      // Create claim instruction using OnlinePumpSdk (no mint needed - collects all fees)
+      const claimInstructions = await onlineSdk.collectCoinCreatorFeeInstructions(publicKey);
+
+      console.log('📝 Generated claim instructions:', claimInstructions.length);
 
       // Handle response
       const transaction = new Transaction();
@@ -658,19 +827,34 @@ export function usePumpFunRedux() {
       transaction.recentBlockhash = blockhashResult.blockhash;
       transaction.feePayer = publicKey;
 
-      // Sign and send the transaction with retry logic
-      const signedTransaction = await signTransaction(transaction);
-      const signature = await retryRpcCall(() => sendTransaction(signedTransaction, connection));
+      console.log('🚀 Sending claim transaction...');
+
+      // Sign and send the transaction with retry logic (single popup)
+      const signature = await retryRpcCall(() => sendTransaction(transaction, connection));
+
+      console.log('✅ Claim transaction sent:', signature);
+      
+      // Save the claimed amount to localStorage
+      try {
+        const claimedFeesKey = `claimed_fees_${publicKey.toString()}`;
+        const currentClaimedStr = localStorage.getItem(claimedFeesKey);
+        const currentClaimed = currentClaimedStr ? parseFloat(currentClaimedStr) : 0;
+        const newTotalClaimed = currentClaimed + amountToClaim;
+        localStorage.setItem(claimedFeesKey, newTotalClaimed.toString());
+        console.log('💰 Updated claimed fees in storage:', newTotalClaimed, 'SOL');
+      } catch (storageError) {
+        console.error('Error saving claimed fees to storage:', storageError);
+      }
 
       const result = {
         signature: signature,
-        mint: mintAddress
+        mint: mintAddress || 'all'
       };
 
       return result;
 
     } catch (error) {
-      console.error('Error claiming fees:', error);
+      console.error('❌ Error claiming fees:', error);
       throw error;
     } finally {
       dispatch(setLoading(false));
@@ -753,6 +937,8 @@ export function usePumpFunRedux() {
     sellToken,
     fetchTokenBalance,
     fetchSolBalance,
+    calculateSellAmount,
+    fetchCreatorFees,
     claimFees,
     setSelectedTokenMint,
     fetchDeployedTokens: fetchDeployedTokensAction,

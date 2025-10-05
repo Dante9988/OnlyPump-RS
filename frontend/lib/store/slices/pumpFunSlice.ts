@@ -56,6 +56,12 @@ export interface DeployedToken {
   slot?: number;
   fee?: number;
   feePayer?: string;
+  // DexScreener data
+  priceUsd?: string;
+  liquidity?: number;
+  volume24h?: number;
+  priceChange24h?: number;
+  marketCap?: number;
 }
 
 interface PumpFunState {
@@ -170,31 +176,198 @@ export const getNextPumpAddress = createAsyncThunk(
   }
 );
 
-// Fetch deployed tokens from Pump.fun
+// Helper function to fetch on-chain token metadata
+async function fetchOnChainMetadata(connection: Connection, mintAddress: string) {
+  try {
+    const mintPubkey = new PublicKey(mintAddress);
+    
+    // Try to fetch metadata from Metaplex standard
+    const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+    
+    // Derive metadata PDA
+    const [metadataPDA] = PublicKey.findProgramAddressSync(
+      [Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+      METADATA_PROGRAM_ID
+    );
+    
+    const accountInfo = await connection.getAccountInfo(metadataPDA);
+    if (!accountInfo) return null;
+    
+    // Simple metadata parsing (name and symbol are at fixed offsets)
+    const data = accountInfo.data;
+    let offset = 1 + 32 + 32; // Skip key, update authority, mint
+    
+    // Read name (u32 length + string)
+    const nameLength = data.readUInt32LE(offset);
+    offset += 4;
+    const name = data.slice(offset, offset + nameLength).toString('utf8').replace(/\0/g, '').trim();
+    offset += nameLength;
+    
+    // Read symbol (u32 length + string)
+    const symbolLength = data.readUInt32LE(offset);
+    offset += 4;
+    const symbol = data.slice(offset, offset + symbolLength).toString('utf8').replace(/\0/g, '').trim();
+    
+    return { name, symbol };
+  } catch (error) {
+    console.error('Error fetching on-chain metadata:', error);
+    return null;
+  }
+}
+
+// Fetch deployed tokens from local storage (created tokens)
 export const fetchDeployedTokens = createAsyncThunk(
   'pumpFun/fetchDeployedTokens',
-  async (creatorPublicKey: string, { rejectWithValue }) => {
+  async (creatorPublicKey: string, { getState, rejectWithValue }) => {
     try {
-      const response = await fetch(`https://frontend-api.pump.fun/coins?order=recent&limit=100`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch deployed tokens');
-      }
-      
-      const data = await response.json();
+      // Use locally stored created tokens instead of external API
+      const state = getState() as { pumpFun: PumpFunState };
+      const createdTokens = state.pumpFun.createdTokens;
       
       // Filter tokens created by the current wallet
-      const userTokens = data.filter((token: any) => 
+      const userTokens = createdTokens.filter((token: CreatedToken) => 
         token.creator === creatorPublicKey
       );
       
-      return userTokens.map((token: any) => ({
-        mint: token.mint,
-        name: token.name,
-        symbol: token.symbol,
-        createdAt: new Date(token.created_timestamp).getTime(),
-        creator: token.creator,
-        pumpAddress: token.mint // In Pump.fun, the mint IS the pump address
-      }));
+      // Deduplicate by mint address
+      const uniqueTokens = Array.from(
+        new Map(userTokens.map(token => [token.mint, token])).values()
+      );
+      
+      // Get connection from state
+      const connectionEndpoint = state.pumpFun.connectionEndpoint;
+      if (!connectionEndpoint) {
+        // Return tokens without metadata enrichment
+        return uniqueTokens.map((token: CreatedToken) => ({
+          mint: token.mint,
+          name: token.name,
+          symbol: token.symbol,
+          createdAt: token.createdAt,
+          creator: token.creator,
+          pumpAddress: token.mint
+        }));
+      }
+      
+      const connection = new Connection(connectionEndpoint);
+      
+      // Fetch on-chain metadata for each token
+      const tokensWithMetadata = await Promise.all(
+        uniqueTokens.map(async (token: CreatedToken) => {
+          const metadata = await fetchOnChainMetadata(connection, token.mint);
+          
+          return {
+            mint: token.mint,
+            name: metadata?.name || token.name,
+            symbol: metadata?.symbol || token.symbol,
+            createdAt: token.createdAt,
+            creator: token.creator,
+            pumpAddress: token.mint
+          };
+        })
+      );
+      
+      // Fetch DexScreener data for all tokens using correct API
+      try {
+        const tokenAddresses = tokensWithMetadata.map(t => t.mint).join(',');
+        // Correct endpoint: v1 API with chainId 'solana'
+        const response = await fetch(
+          `https://api.dexscreener.com/tokens/v1/solana/${tokenAddresses}`,
+          {
+            headers: {
+              'Accept': 'application/json',
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('DexScreener response:', data);
+          
+          // Merge DexScreener data - v1 API returns array of pairs
+          return tokensWithMetadata.map(token => {
+            // Find the pair where baseToken.address matches our token mint
+            const dexPair = data?.find((item: any) => 
+              item.baseToken?.address === token.mint
+            );
+            
+            return {
+              ...token,
+              // Use actual token name/symbol from DexScreener if available
+              name: dexPair?.baseToken?.name || token.name,
+              symbol: dexPair?.baseToken?.symbol || token.symbol,
+              priceUsd: dexPair?.priceUsd,
+              liquidity: dexPair?.liquidity?.usd,
+              volume24h: dexPair?.volume?.h24,
+              priceChange24h: dexPair?.priceChange?.h24,
+              marketCap: dexPair?.marketCap || dexPair?.fdv,
+            };
+          });
+        } else {
+          console.error('DexScreener API error:', response.status, await response.text());
+        }
+      } catch (error) {
+        console.error('Error fetching DexScreener data:', error);
+      }
+      
+      return tokensWithMetadata;
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+);
+
+// Refresh token metadata from DexScreener (only when user clicks refresh)
+export const refreshTokenMetadata = createAsyncThunk(
+  'pumpFun/refreshTokenMetadata',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as { pumpFun: PumpFunState };
+      const deployedTokens = state.pumpFun.deployedTokens;
+      
+      if (deployedTokens.length === 0) {
+        return [];
+      }
+      
+      const tokenAddresses = deployedTokens.map(t => t.mint).join(',');
+      
+      // Use correct DexScreener v1 API endpoint
+      const response = await fetch(
+        `https://api.dexscreener.com/tokens/v1/solana/${tokenAddresses}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('DexScreener API error:', response.status, errorText);
+        throw new Error('Failed to fetch from DexScreener');
+      }
+      
+      const data = await response.json();
+      console.log('DexScreener refresh response:', data);
+      
+      // Merge DexScreener data with existing tokens - v1 API returns array of pairs
+      return deployedTokens.map((token: DeployedToken) => {
+        // Find the pair where baseToken.address matches our token mint
+        const dexPair = data?.find((item: any) => 
+          item.baseToken?.address === token.mint
+        );
+        
+        return {
+          ...token,
+          // Use actual token name/symbol from DexScreener if available
+          name: dexPair?.baseToken?.name || token.name,
+          symbol: dexPair?.baseToken?.symbol || token.symbol,
+          priceUsd: dexPair?.priceUsd,
+          liquidity: dexPair?.liquidity?.usd,
+          volume24h: dexPair?.volume?.h24,
+          priceChange24h: dexPair?.priceChange?.h24,
+          marketCap: dexPair?.marketCap || dexPair?.fdv,
+        };
+      });
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');
     }
@@ -439,14 +612,30 @@ const pumpFunSlice = createSlice({
     // Reset state
     resetState: () => initialState,
     
-    // Add created token
+    // Add created token (with deduplication)
     addCreatedToken: (state, action: PayloadAction<CreatedToken>) => {
-      state.createdTokens.unshift(action.payload); // Add to beginning
+      // Check if token already exists
+      const exists = state.createdTokens.find(t => t.mint === action.payload.mint);
+      if (!exists) {
+        state.createdTokens.unshift(action.payload); // Add to beginning
+      }
     },
     
     // Clear created tokens
     clearCreatedTokens: (state) => {
       state.createdTokens = [];
+    },
+    
+    // Deduplicate existing tokens (run on app init to clean up persisted state)
+    deduplicateTokens: (state) => {
+      // Deduplicate createdTokens
+      state.createdTokens = Array.from(
+        new Map(state.createdTokens.map(token => [token.mint, token])).values()
+      );
+      // Deduplicate deployedTokens
+      state.deployedTokens = Array.from(
+        new Map(state.deployedTokens.map(token => [token.mint, token])).values()
+      );
     },
     
     // Set deployed tokens
@@ -512,12 +701,22 @@ const pumpFunSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchDeployedTokens.fulfilled, (state, action) => {
-        state.deployedTokens = action.payload;
+        // Deduplicate tokens by mint address
+        const uniqueTokens = Array.from(
+          new Map(action.payload.map((token: DeployedToken) => [token.mint, token])).values()
+        );
+        state.deployedTokens = uniqueTokens;
         state.isLoadingDeployedTokens = false;
       })
       .addCase(fetchDeployedTokens.rejected, (state, action) => {
         state.error = action.error.message || 'Failed to fetch deployed tokens';
         state.isLoadingDeployedTokens = false;
+      });
+    
+    // Refresh token metadata
+    builder
+      .addCase(refreshTokenMetadata.fulfilled, (state, action) => {
+        state.deployedTokens = action.payload;
       });
     
     // Fetch transaction history
@@ -551,6 +750,7 @@ export const {
   resetState,
   addCreatedToken,
   clearCreatedTokens,
+  deduplicateTokens,
   setDeployedTokens,
   setLoadingDeployedTokens,
 } = pumpFunSlice.actions;

@@ -88,15 +88,22 @@ export default function CreateTokenSeamless() {
   // Load balances when wallet connects or token changes
   useEffect(() => {
     const loadBalances = async () => {
-      if (!connected || !publicKey) return;
+      if (!connected || !publicKey || !connection) {
+        console.log('Skipping balance load - not ready:', { connected, publicKey: !!publicKey, connection: !!connection });
+        return;
+      }
       
       setIsLoadingBalances(true);
       try {
+        console.log('Fetching SOL balance...');
         const solBal = await fetchSolBalance();
+        console.log('SOL balance:', solBal);
         setSolBalance(solBal);
         
         if (createdTokenMint) {
+          console.log('Fetching token balance for:', createdTokenMint);
           const tokenBal = await fetchTokenBalance(createdTokenMint);
+          console.log('Token balance:', tokenBal);
           setTokenBalance(tokenBal);
         }
       } catch (error) {
@@ -107,7 +114,7 @@ export default function CreateTokenSeamless() {
     };
 
     loadBalances();
-  }, [connected, publicKey, createdTokenMint, fetchSolBalance, fetchTokenBalance]);
+  }, [connected, publicKey, connection, createdTokenMint, fetchSolBalance, fetchTokenBalance]);
 
   // Load deployed tokens and transaction history when wallet connects
   useEffect(() => {
@@ -192,6 +199,11 @@ export default function CreateTokenSeamless() {
 
     if (!connected || !publicKey) {
       toast.error('Please connect your wallet first');
+      return;
+    }
+
+    if (!connection) {
+      toast.error('Solana connection not ready. Please wait a moment and try again.');
       return;
     }
 
@@ -383,7 +395,14 @@ export default function CreateTokenSeamless() {
                                 <h3 className="font-bold text-lg">Wallet Connected!</h3>
                                 <div className="text-sm text-base-content/70">
                                   <div className="font-mono">{publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}</div>
-                                  <div className="text-xs">via {wallet?.adapter.name}</div>
+                                  <div className="text-xs flex items-center gap-2">
+                                    <span>via {wallet?.adapter.name}</span>
+                                    {connection ? (
+                                      <span className="badge badge-success badge-xs">RPC Connected</span>
+                                    ) : (
+                                      <span className="badge badge-warning badge-xs">RPC Connecting...</span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -610,7 +629,7 @@ export default function CreateTokenSeamless() {
                   <button 
                     onClick={handleCreateToken}
                     className={`btn btn-primary btn-lg w-full ${isLoading ? 'loading' : ''}`}
-                    disabled={isLoading || !connected || !name || !symbol}
+                    disabled={isLoading || !connected || !connection || !name || !symbol}
                   >
                     {isLoading ? (
                       <>

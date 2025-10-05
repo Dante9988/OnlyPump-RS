@@ -381,6 +381,48 @@ node consolidate-addresses.js live_pump_addresses.json frontend/public/test_pump
 }
 ```
 
+## 🚀 Deployment
+
+### Netlify Deployment (Frontend)
+
+The frontend can be deployed to Netlify for free. See the complete guide:
+
+📖 **[Netlify Deployment Guide](./NETLIFY_DEPLOYMENT.md)**
+
+**Quick Setup:**
+1. Connect your repository to Netlify
+2. Set base directory to `frontend`
+3. Configure environment variables (see below)
+4. Deploy!
+
+### Environment Variables
+
+All environment variables are documented here:
+
+📖 **[Environment Variables Reference](./ENVIRONMENT_VARIABLES.md)**
+
+**Required for Netlify:**
+- `NEXT_PUBLIC_API_URL` - Your backend API URL
+- `NEXT_PUBLIC_SOLANA_RPC_URL` - Helius RPC endpoint
+- `NEXT_PUBLIC_HELIUS_API_KEY` - Helius API key
+
+**Quick Setup via Netlify CLI:**
+```bash
+netlify env:set NEXT_PUBLIC_API_URL "https://your-backend.com"
+netlify env:set NEXT_PUBLIC_SOLANA_RPC_URL "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+netlify env:set NEXT_PUBLIC_HELIUS_API_KEY "YOUR_KEY"
+```
+
+### Backend Deployment
+
+The Rust backend needs to be deployed separately. Recommended platforms:
+- **Railway** - Easy Rust deployment (recommended)
+- **Fly.io** - Global edge deployment
+- **DigitalOcean App Platform** - Managed infrastructure
+- **AWS/GCP/Azure** - Full control
+
+See [NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md#backend-deployment) for details.
+
 ## 📄 License
 
 This project is licensed under the MIT License.
