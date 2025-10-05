@@ -1,0 +1,15 @@
+{
+  "suffix": "pump",
+  "count": 3,
+  "generated_at": "2025-10-05T04:02:55.476205511+00:00",
+  "keypairs": [
+    {
+      "public_key": "8eVjPHYirFhbeT5jwV9fydxFmpqeeKWbu7U2N2cMpump",
+      "private_key": "461ukFycU7EdhUhnbhHCLZXVLZcS2YNwAHECZBbamv2zvQeZXwmsc1Ciy9ViEspWkRNAZcUQgSKZ3w4QkatsiUfY"
+    },
+    {
+      "public_key": "A5tzZ65Cx2CEBDM373uVaSouMhZxyDoTV9USTBTXpump",
+      "private_key": "4A1sAoVsQeHzzNKRmc7Y6DKQhshCkMZ33ccLPaWsq57MQyeBJW2rBB9nLQxKVZj9p3wN8BM1LCDR17wrw1GwV1QS"
+    }
+  ]
+}
