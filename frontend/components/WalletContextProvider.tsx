@@ -27,7 +27,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
     if (customRpcUrl) return customRpcUrl;
 
     // Use environment variable for RPC endpoint
-    return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=270884b0-cb80-4b6d-8a2f-372de3c6774e';
   }, []);
 
   // @solana/wallet-adapter-wallets includes all the adapters but supports tree shaking

@@ -15,7 +15,7 @@ export default function Navbar() {
         try {
           const { Connection, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
           const connection = new Connection(
-            process.env.NEXT_PUBLIC_RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com'
+            process.env.NEXT_PUBLIC_RPC_ENDPOINT || 'https://mainnet.helius-rpc.com/?api-key=270884b0-cb80-4b6d-8a2f-372de3c6774e'
           );
           const balance = await connection.getBalance(publicKey);
           setSolBalance(balance / LAMPORTS_PER_SOL);

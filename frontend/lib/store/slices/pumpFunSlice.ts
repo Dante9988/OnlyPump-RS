@@ -123,7 +123,7 @@ export const initializeConnection = createAsyncThunk(
     const rpcEndpoints = [
       rpcUrl,
       process.env.NEXT_PUBLIC_SOLANA_RPC_URL,
-      'https://api.mainnet-beta.solana.com', // Fallback
+      'https://mainnet.helius-rpc.com/?api-key=270884b0-cb80-4b6d-8a2f-372de3c6774e', // Helius fallback
     ].filter(Boolean);
 
     // Try each endpoint until one works
