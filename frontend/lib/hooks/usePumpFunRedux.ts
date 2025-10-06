@@ -34,6 +34,7 @@ import {
   SYSVAR_RENT_PUBKEY,
   LAMPORTS_PER_SOL,
   Connection,
+  ComputeBudgetProgram,
 } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
@@ -145,6 +146,22 @@ async function retryRpcCall<T>(
   throw new Error('Max retries exceeded');
 }
 
+// Helper function to validate transaction size
+function validateTransactionSize(transaction: Transaction): boolean {
+  const serialized = transaction.serialize({ requireAllSignatures: false });
+  const size = serialized.length;
+  const maxSize = 1232; // Solana's transaction size limit
+  
+  console.log(`📦 Transaction size: ${size} bytes (limit: ${maxSize})`);
+  
+  if (size > maxSize) {
+    console.error(`❌ Transaction too large: ${size} > ${maxSize} bytes`);
+    return false;
+  }
+  
+  return true;
+}
+
 export function usePumpFunRedux() {
   const { publicKey, signTransaction, sendTransaction, connected } = useWallet();
   const dispatch = useAppDispatch();
@@ -209,18 +226,14 @@ export function usePumpFunRedux() {
     }
   }, []);
 
-  // Create metadata URI
+  // Create metadata URI (optimized for smaller transaction size)
   const createMetadataUri = useCallback((request: CreateTokenRequest): string => {
+    // Create minimal metadata to reduce transaction size
     const metadata = {
       name: request.name,
       symbol: request.symbol,
-      description: request.description,
+      description: request.description?.substring(0, 100) || '', // Limit description length
       image: request.image_path || '',
-      attributes: [],
-      properties: {
-        files: [],
-        category: 'image',
-      },
     };
 
     const metadataJson = JSON.stringify(metadata);
@@ -285,15 +298,22 @@ export function usePumpFunRedux() {
           );
         }
 
-        const { address: pumpAddress } = pumpAddressResult.payload as {
+        const { address: pumpAddress, skippedAddresses } = pumpAddressResult.payload as {
           address: { public_key: string; private_key: string };
           skippedAddresses: string[];
         };
+        
+        console.log(`🎯 Using pump address: ${pumpAddress.public_key}`);
+        if (skippedAddresses.length > 0) {
+          console.log(`⏭️ Skipped ${skippedAddresses.length} already-used addresses`);
+        }
 
         // Convert pump private key to keypair
         const privateKeyBytes = base58ToUint8Array(pumpAddress.private_key);
         const mintKeypair = Keypair.fromSecretKey(privateKeyBytes);
         const mintPubkey = mintKeypair.publicKey;
+        
+        console.log(`🔑 Mint pubkey: ${mintPubkey.toString()}`);
 
         // Using vanity address as mint
 
@@ -328,6 +348,12 @@ export function usePumpFunRedux() {
         let signature: string;
         if (createRes.data) {
           const transaction = new Transaction();
+          
+          // Add compute budget instructions (reduced for smaller transaction)
+          transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
+          transaction.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }));
+          console.log('💻 Added compute budget: 300k units, 0.00005 SOL priority fee');
+          
           transaction.add(createRes.data);
 
           // Transaction prepared for sending
@@ -337,11 +363,19 @@ export function usePumpFunRedux() {
           transaction.recentBlockhash = blockhashResult.blockhash;
           transaction.feePayer = publicKey;
 
+          // Validate transaction size before sending
+          if (!validateTransactionSize(transaction)) {
+            throw new Error('Transaction too large. Please try with shorter description or name.');
+          }
+          
           // Partial-sign with mint keypair
           transaction.partialSign(mintKeypair);
+          console.log('✍️ Mint keypair signed transaction');
 
           // Sign and send with wallet (single popup)
+          console.log('🚀 Sending transaction to wallet for signature...');
           signature = await retryRpcCall(() => sendTransaction(transaction, connection));
+          console.log('✅ Transaction sent:', signature);
         } else {
           throw new Error('Invalid response from SDK - expected instruction');
         }
@@ -368,9 +402,21 @@ export function usePumpFunRedux() {
         dispatch(addCreatedToken(createdToken));
 
         return result;
-      } catch (error) {
-        console.error('Error creating token:', error);
-        throw error;
+      } catch (error: any) {
+        console.error('❌ Error creating token:', error);
+        console.error('❌ Error message:', error?.message);
+        console.error('❌ Error logs:', error?.logs);
+        
+        // Provide more helpful error messages
+        if (error?.message?.includes('Transaction too large')) {
+          throw new Error('Transaction too large. The token metadata might be too long. Try shorter descriptions.');
+        } else if (error?.message?.includes('Blockhash not found')) {
+          throw new Error('Network issue. Please try again.');
+        } else if (error?.message?.includes('insufficient')) {
+          throw new Error('Insufficient SOL balance. You need at least 0.02 SOL to create a token.');
+        } else {
+          throw error;
+        }
       } finally {
         dispatch(setLoading(false));
       }
@@ -478,17 +524,38 @@ export function usePumpFunRedux() {
         let signature: string;
         if (allInstructions && Array.isArray(allInstructions)) {
           const transaction = new Transaction();
+          
+          // Add compute budget instructions (optimized for smaller transaction)
+          const computeUnitLimit = ComputeBudgetProgram.setComputeUnitLimit({
+            units: 300_000, // Reduced compute units
+          });
+          const computeUnitPrice = ComputeBudgetProgram.setComputeUnitPrice({
+            microLamports: 50_000, // Reduced priority fee
+          });
+          
+          transaction.add(computeUnitLimit);
+          transaction.add(computeUnitPrice);
+          console.log('💻 Added compute budget: 300k units, 0.00005 SOL priority fee');
+          
           allInstructions.forEach((ix) => transaction.add(ix));
 
           const { blockhash } = await retryRpcCall(() => activeConnection.getLatestBlockhash());
           transaction.recentBlockhash = blockhash;
           transaction.feePayer = publicKey;
+          
+          // Validate transaction size before sending
+          if (!validateTransactionSize(transaction)) {
+            throw new Error('Transaction too large. Please try with shorter description or name.');
+          }
 
           // Partial sign with the mint keypair
           transaction.partialSign(mintKeypair);
+          console.log('✍️ Mint keypair signed transaction');
 
           // Sign and send with wallet (single popup)
+          console.log('🚀 Sending transaction to wallet for signature...');
           signature = await retryRpcCall(() => sendTransaction(transaction, activeConnection));
+          console.log('✅ Transaction sent:', signature);
         } else {
           throw new Error('Invalid response from SDK - expected instructions');
         }

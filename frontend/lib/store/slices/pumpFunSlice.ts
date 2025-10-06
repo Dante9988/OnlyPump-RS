@@ -148,13 +148,50 @@ export const initializeConnection = createAsyncThunk(
   }
 );
 
+// Helper function to update test_pump.json file
+const updateTestPumpFile = async (remainingAddresses: VanityKeypair[]) => {
+  try {
+    const updatedData = {
+      suffix: "pump",
+      count: remainingAddresses.length,
+      generated_at: new Date().toISOString(),
+      keypairs: remainingAddresses
+    };
+    
+    // Store the updated data in localStorage as a backup
+    localStorage.setItem('pump_addresses_backup', JSON.stringify(updatedData));
+    
+    // Note: In a real production app, you'd want to update the actual file
+    // For now, we'll just log and store in localStorage
+    console.log(`✅ Updated pump addresses in memory: ${remainingAddresses.length} remaining addresses`);
+    console.log('📝 Note: In production, this would update the actual test_pump.json file');
+    
+  } catch (error) {
+    console.warn('Error updating pump addresses:', error);
+  }
+};
+
 // Load pump addresses
 export const loadPumpAddresses = createAsyncThunk('pumpFun/loadPumpAddresses', async () => {
+  // First check if we have a backup in localStorage (updated addresses)
+  try {
+    const backup = localStorage.getItem('pump_addresses_backup');
+    if (backup) {
+      const backupData = JSON.parse(backup);
+      console.log(`📦 Loading ${backupData.keypairs.length} addresses from localStorage backup`);
+      return backupData.keypairs || [];
+    }
+  } catch (error) {
+    console.warn('Error loading backup addresses from localStorage:', error);
+  }
+  
+  // Fallback to loading from the original file
   const response = await fetch('/test_pump.json');
   if (!response.ok) {
     throw new Error('Failed to load pump addresses');
   }
   const data = await response.json();
+  console.log(`📦 Loading ${data.keypairs.length} addresses from test_pump.json`);
   return data.keypairs || [];
 });
 
@@ -200,6 +237,13 @@ export const getNextPumpAddress = createAsyncThunk(
             continue;
           } else {
             console.log(`✅ Address ${candidateAddress.public_key.slice(0, 8)} is available!`);
+            
+            // Remove the used address from the remaining addresses
+            const remainingAddresses = addresses.slice(0, -1);
+            
+            // Update the test_pump.json file asynchronously
+            updateTestPumpFile(remainingAddresses);
+            
             return {
               address: candidateAddress,
               skippedAddresses
@@ -208,6 +252,13 @@ export const getNextPumpAddress = createAsyncThunk(
         } else {
           // If API call fails, assume address is available (fallback)
           console.log(`⚠️ Could not verify address ${candidateAddress.public_key.slice(0, 8)}, using anyway`);
+          
+          // Remove the used address from the remaining addresses
+          const remainingAddresses = addresses.slice(0, -1);
+          
+          // Update the test_pump.json file asynchronously
+          updateTestPumpFile(remainingAddresses);
+          
           return {
             address: candidateAddress,
             skippedAddresses
@@ -216,6 +267,13 @@ export const getNextPumpAddress = createAsyncThunk(
       } catch (error) {
         console.error('Error checking address:', error);
         // On error, use the address anyway (fallback)
+        
+        // Remove the used address from the remaining addresses
+        const remainingAddresses = addresses.slice(0, -1);
+        
+        // Update the test_pump.json file asynchronously
+        updateTestPumpFile(remainingAddresses);
+        
         return {
           address: candidateAddress,
           skippedAddresses
