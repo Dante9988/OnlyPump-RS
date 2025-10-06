@@ -277,7 +277,7 @@ export function usePumpFunRedux() {
       dispatch(clearError());
 
       try {
-        // Get a pump address from our pre-loaded pool
+        // Get a pump address from our pre-loaded pool (with on-chain verification)
         const pumpAddressResult = await dispatch(getNextPumpAddress());
         if (getNextPumpAddress.rejected.match(pumpAddressResult)) {
           throw new Error(
@@ -285,9 +285,9 @@ export function usePumpFunRedux() {
           );
         }
 
-        const pumpAddress = pumpAddressResult.payload as {
-          public_key: string;
-          private_key: string;
+        const { address: pumpAddress } = pumpAddressResult.payload as {
+          address: { public_key: string; private_key: string };
+          skippedAddresses: string[];
         };
 
         // Convert pump private key to keypair
@@ -420,13 +420,15 @@ export function usePumpFunRedux() {
       dispatch(clearError());
 
       try {
-        // Get vanity pump address as mint
+        // Get vanity pump address as mint (with on-chain verification)
         const pumpAddressResult = await dispatch(getNextPumpAddress());
         if (getNextPumpAddress.rejected.match(pumpAddressResult)) {
           throw new Error('No pump addresses available. Please refresh to reload addresses.');
         }
-        const pumpAddress: { public_key: string; private_key: string } =
-          pumpAddressResult.payload as any;
+        const { address: pumpAddress } = pumpAddressResult.payload as {
+          address: { public_key: string; private_key: string };
+          skippedAddresses: string[];
+        };
         const mintKeypair = Keypair.fromSecretKey(base58ToUint8Array(pumpAddress.private_key));
         const mintPubkey = mintKeypair.publicKey;
 

@@ -158,18 +158,73 @@ export const loadPumpAddresses = createAsyncThunk('pumpFun/loadPumpAddresses', a
   return data.keypairs || [];
 });
 
-// Get next pump address
+// Get next pump address (with on-chain verification)
 export const getNextPumpAddress = createAsyncThunk(
   'pumpFun/getNextPumpAddress',
   async (_, { getState }) => {
     const state = getState() as { pumpFun: PumpFunState };
-    const addresses = state.pumpFun.pumpAddresses;
-
+    let addresses = [...state.pumpFun.pumpAddresses]; // Create a copy
+    
     if (addresses.length === 0) {
       throw new Error('No pump addresses available');
     }
-
-    return addresses[addresses.length - 1];
+    
+    // Check if the next address has already been used on-chain
+    const heliusApiKey = process.env.NEXT_PUBLIC_HELIUS_API_KEY || 'f7c74abc-20d1-450d-b655-64f460fd5856';
+    const maxAttempts = 10; // Try up to 10 addresses before giving up
+    const skippedAddresses: string[] = [];
+    
+    for (let attempt = 0; attempt < maxAttempts && addresses.length > 0; attempt++) {
+      const candidateAddress = addresses[addresses.length - 1];
+      
+      try {
+        // Query Helius to check if this address has been used as a mint
+        const response = await fetch(
+          `https://api.helius.xyz/v0/addresses/${candidateAddress.public_key}/transactions?api-key=${heliusApiKey}&limit=10`
+        );
+        
+        if (response.ok) {
+          const transactions = await response.json();
+          console.log(`🔍 Checking address ${candidateAddress.public_key.slice(0, 8)}... - Found ${transactions.length} transactions`);
+          
+          // Check if any transactions involve Pump.fun program (token creation)
+          const hasPumpFunActivity = transactions.some((tx: any) => 
+            tx.accountData?.some((acc: any) => acc.account === '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P')
+          );
+          
+          if (hasPumpFunActivity) {
+            console.log(`⚠️ Address ${candidateAddress.public_key.slice(0, 8)} already used on-chain, skipping...`);
+            // Track skipped address and try the next one
+            skippedAddresses.push(candidateAddress.public_key);
+            addresses = addresses.slice(0, -1);
+            continue;
+          } else {
+            console.log(`✅ Address ${candidateAddress.public_key.slice(0, 8)} is available!`);
+            return {
+              address: candidateAddress,
+              skippedAddresses
+            };
+          }
+        } else {
+          // If API call fails, assume address is available (fallback)
+          console.log(`⚠️ Could not verify address ${candidateAddress.public_key.slice(0, 8)}, using anyway`);
+          return {
+            address: candidateAddress,
+            skippedAddresses
+          };
+        }
+      } catch (error) {
+        console.error('Error checking address:', error);
+        // On error, use the address anyway (fallback)
+        return {
+          address: candidateAddress,
+          skippedAddresses
+        };
+      }
+    }
+    
+    // If we've checked all addresses and they're all used, throw error
+    throw new Error('No unused pump addresses available. All addresses in pool have been used.');
   }
 );
 
@@ -704,9 +759,17 @@ const pumpFunSlice = createSlice({
     // Get next pump address
     builder
       .addCase(getNextPumpAddress.fulfilled, (state, action) => {
-        // Remove the used address
-        state.pumpAddresses = state.pumpAddresses.slice(0, -1);
+        // Remove the used address and any skipped addresses
+        const { address, skippedAddresses } = action.payload;
+        const addressesToRemove = new Set([address.public_key, ...skippedAddresses]);
+        
+        state.pumpAddresses = state.pumpAddresses.filter(addr => !addressesToRemove.has(addr.public_key));
         state.pumpAddressStats.pool_size = state.pumpAddresses.length;
+        
+        if (skippedAddresses.length > 0) {
+          console.log(`⚠️ Removed ${skippedAddresses.length} already-used addresses from pool`);
+        }
+        console.log(`✅ Using address ${address.public_key.slice(0, 8)}, ${state.pumpAddresses.length} addresses remaining`);
       })
       .addCase(getNextPumpAddress.rejected, (state, action) => {
         state.error = action.error.message || 'No pump addresses available';
