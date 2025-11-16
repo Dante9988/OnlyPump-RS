@@ -1,9 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { User, Menu, LogOut } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useWaitlistModal } from "@/contexts/WaitlistModalContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import onlyPumpLogo from "@/assets/onlypump-logo.jpg";
@@ -11,31 +10,9 @@ import WalletConnectButton from "@/components/wallet/WalletConnectButton";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState(null);
   const { openModal } = useWaitlistModal();
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast({
-      title: "Signed out",
-      description: "You have been signed out successfully",
-    });
-    navigate("/");
-  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -70,29 +47,15 @@ const Header = () => {
         {/* Desktop CTA Buttons */}
         <div className="hidden md:flex items-center space-x-4">
           <WalletConnectButton />
-          {!user ? (
-            <>
-              <Button onClick={openModal} variant="outline" size="sm">
-                Join Waitlist
-              </Button>
-              <Button onClick={() => navigate("/auth")} variant="default" size="sm">
-                Sign In
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/dashboard">
-                  <User className="h-4 w-4" />
-                  Dashboard
-                </Link>
-              </Button>
-              <Button onClick={handleLogout} variant="ghost" size="sm">
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
-              </Button>
-            </>
-          )}
+          <Button onClick={openModal} variant="outline" size="sm">
+            Join Waitlist
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/dashboard">
+              <User className="h-4 w-4" />
+              Dashboard
+            </Link>
+          </Button>
         </div>
 
         {/* Mobile Menu Button */}
@@ -137,29 +100,15 @@ const Header = () => {
               </Link>
             </Button>
             <div className="pt-3 space-y-2">
-              {!user ? (
-                <>
-                  <Button onClick={() => { openModal(); setIsMenuOpen(false); }} variant="outline" size="sm" className="w-full">
-                    Join Waitlist
-                  </Button>
-                  <Button onClick={() => { navigate("/auth"); setIsMenuOpen(false); }} variant="default" size="sm" className="w-full">
-                    Sign In
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="outline" size="sm" className="w-full" asChild>
-                    <Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>
-                      <User className="h-4 w-4" />
-                      Dashboard
-                    </Link>
-                  </Button>
-                  <Button onClick={() => { handleLogout(); setIsMenuOpen(false); }} variant="ghost" size="sm" className="w-full">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sign Out
-                  </Button>
-                </>
-              )}
+              <Button onClick={() => { openModal(); setIsMenuOpen(false); }} variant="outline" size="sm" className="w-full">
+                Join Waitlist
+              </Button>
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>
+                  <User className="h-4 w-4" />
+                  Dashboard
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
