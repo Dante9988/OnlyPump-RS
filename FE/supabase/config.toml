@@ -1,4 +1,0 @@
-project_id = "ohqlzpomzaevpdbzohhc"
-
-[functions.record-presale-deposit]
-verify_jwt = false
