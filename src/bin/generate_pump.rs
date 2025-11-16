@@ -22,6 +22,7 @@ impl VanityService {
         let workers = rayon::current_num_threads().max(2);
         let mut collected_keypairs = Vec::new();
         let mut batch_buffer = VecDeque::new();
+        let suffix_clone = suffix.to_string();
 
         std::thread::scope(|scope| {
             // Spawn worker threads
@@ -60,14 +61,14 @@ impl VanityService {
                     
                     // Save batch when we reach batch_size
                     if batch_buffer.len() >= batch_size {
-                        Self::save_batch_to_file(&mut batch_buffer, output_file, count);
+                        Self::save_batch_to_file(&mut batch_buffer, output_file, count, &suffix_clone);
                     }
                 }
             }
             
             // Save any remaining keypairs
             if !batch_buffer.is_empty() {
-                Self::save_batch_to_file(&mut batch_buffer, output_file, count);
+                Self::save_batch_to_file(&mut batch_buffer, output_file, count, &suffix_clone);
             }
             
             stop.store(true, Ordering::Relaxed);
@@ -76,7 +77,7 @@ impl VanityService {
         collected_keypairs
     }
     
-    fn save_batch_to_file(batch_buffer: &mut VecDeque<VanityKeypair>, output_file: &str, total_found: usize) {
+    fn save_batch_to_file(batch_buffer: &mut VecDeque<VanityKeypair>, output_file: &str, total_found: usize, suffix: &str) {
         let mut batch_keypairs = Vec::new();
         for _ in 0..batch_buffer.len() {
             if let Some(kp) = batch_buffer.pop_front() {
@@ -85,7 +86,7 @@ impl VanityService {
         }
         
         let batch = VanityBatch {
-            suffix: "pump".to_string(),
+            suffix: suffix.to_string(),
             count: batch_keypairs.len(),
             generated_at: chrono::Utc::now().to_rfc3339(),
             keypairs: batch_keypairs,
@@ -124,18 +125,19 @@ struct VanityBatch {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let total_count: usize = args.get(1).unwrap_or(&"1000".to_string()).parse().unwrap_or(1000);
-    let batch_size: usize = args.get(2).unwrap_or(&"5".to_string()).parse().unwrap_or(5);
-    let output_file = args.get(3).unwrap_or(&"live_pump_addresses.json".to_string()).clone();
+    let suffix = args.get(1).unwrap_or(&"pump".to_string()).clone();
+    let total_count: usize = args.get(2).unwrap_or(&"1000".to_string()).parse().unwrap_or(1000);
+    let batch_size: usize = args.get(3).unwrap_or(&"5".to_string()).parse().unwrap_or(5);
+    let output_file = args.get(4).unwrap_or(&format!("live_{}_addresses.json", suffix)).clone();
     
-    println!("🚀 Generating {} vanity addresses ending with 'pump'", total_count);
+    println!("🚀 Generating {} vanity addresses ending with '{}'", total_count, suffix);
     println!("📦 Saving in batches of {} addresses", batch_size);
     println!("⏱️  This may take a while...");
     println!("💡 Expected ~113k attempts per address");
     println!("📁 Output file: {}", output_file);
     
     let start = std::time::Instant::now();
-    let keypairs = VanityService::generate_vanity_live("pump", total_count, batch_size, &output_file);
+    let keypairs = VanityService::generate_vanity_live(&suffix, total_count, batch_size, &output_file);
     let duration = start.elapsed();
     
     println!("✅ Generated {} vanity addresses in {:?}", keypairs.len(), duration);

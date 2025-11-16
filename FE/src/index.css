@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* OnlyPump.me Design System - Bold, Clean, Slightly Memetic */
+
+@layer base {
+  :root {
+    /* Brand Colors - OnlyPump.me */
+    --background: 237 42% 6%; /* Ink Black #0B0B0F */
+    --foreground: 210 20% 96%; /* Off-White #F5F7FA */
+
+    --card: 237 42% 8%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 237 42% 8%;
+    --popover-foreground: 210 20% 96%;
+
+    /* Primary Purple #7E3AF2 */
+    --primary: 258 87% 58%;
+    --primary-foreground: 210 20% 96%;
+    --primary-glow: 258 87% 70%;
+
+    /* Hot Pink #FF4FB6 */
+    --secondary: 324 100% 65%;
+    --secondary-foreground: 237 42% 6%;
+
+    /* Acid Green #00E676 */
+    --accent: 158 100% 45%;
+    --accent-foreground: 237 42% 6%;
+
+    --muted: 237 20% 15%;
+    --muted-foreground: 210 10% 65%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 20% 96%;
+
+    --border: 237 20% 15%;
+    --input: 237 20% 12%;
+    --ring: 258 87% 58%;
+
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--accent)));
+    --gradient-dark: linear-gradient(180deg, hsl(var(--background)), hsl(237 42% 4%));
+
+    /* Shadows */
+    --shadow-neon: 0 0 30px hsl(var(--primary) / 0.3);
+    --shadow-pink: 0 0 30px hsl(var(--secondary) / 0.3);
+    --shadow-green: 0 0 30px hsl(var(--accent) / 0.3);
+    --shadow-elevation: 0 10px 40px -10px hsl(237 42% 2% / 0.5);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 800; /* ExtraBold */
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary));
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary-glow));
+  }
+}
+
+@layer components {
+  .neon-glow {
+    box-shadow: var(--shadow-neon);
+  }
+  
+  .pink-glow {
+    box-shadow: var(--shadow-pink);
+  }
+  
+  .green-glow {
+    box-shadow: var(--shadow-green);
+  }
+
+  .gradient-text {
+    background: var(--gradient-hero);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Scrolling faces animation */
+  .animate-scroll {
+    animation: scroll 30s linear infinite;
+  }
+  
+  .animate-scroll:hover {
+    animation-play-state: paused;
+  }
+  
+  @keyframes scroll {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+}
+
